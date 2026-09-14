@@ -36,10 +36,10 @@
             "bundleId": "com.example.plugintemplate-for-obs"
         }
     },
-    "name": "plugintemplate-for-obs",
-    "displayName": "Plugin Template for OBS",
+    "name": "auto-exposure-filter",
+    "displayName": "Auto Exposure (Adaptive Brightness)",
     "version": "1.0.0",
-    "author": "Your Name Here",
+    "author": "nice okiraku",
     "website": "https://example.com",
     "email": "me@example.com"
 }

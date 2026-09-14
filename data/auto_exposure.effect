@@ -1,0 +1,44 @@
+uniform float4x4 ViewProj;
+uniform texture2d image;
+uniform float gain;
+
+sampler_state def_sampler {
+	Filter   = Linear;
+	AddressU = Clamp;
+	AddressV = Clamp;
+};
+
+struct VertData {
+	float4 pos : POSITION;
+	float2 uv  : TEXCOORD0;
+};
+
+VertData VSDefault(VertData v_in)
+{
+	VertData vert_out;
+	vert_out.pos = mul(float4(v_in.pos.xyz, 1.0), ViewProj);
+	vert_out.uv  = v_in.uv;
+	return vert_out;
+}
+
+float4 PSAutoExposure(VertData v_in) : TARGET
+{
+	float4 color = image.Sample(def_sampler, v_in.uv);
+	float3 graded = color.rgb * gain;
+
+	/* Soft-knee compression above white (1.0) so lifting shadows in a
+	 * dark scene doesn't clip highlights that were already bright. */
+	float3 outc = graded / (1.0 + max(graded - 1.0, 0.0));
+	outc = saturate(outc);
+
+	return float4(outc, color.a);
+}
+
+technique Draw
+{
+	pass
+	{
+		vertex_shader = VSDefault(v_in);
+		pixel_shader  = PSAutoExposure(v_in);
+	}
+}

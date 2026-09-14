@@ -29,6 +29,8 @@ OBS_MODULE_USE_DEFAULT_LOCALE(PLUGIN_NAME, "en-US")
 #define SETTING_SPEED "speed"
 #define SETTING_MIN_GAIN "min_gain"
 #define SETTING_MAX_GAIN "max_gain"
+#define SETTING_COMPARISON_MODE "comparison_mode"
+#define SETTING_SPLIT_POSITION "split_position"
 
 /* Side length (in pixels) of the tiny render target used to estimate
  * average scene brightness. Small on purpose: we only need a rough
@@ -41,6 +43,8 @@ struct auto_exposure_data {
 	gs_effect_t *effect;
 	gs_eparam_t *param_image;
 	gs_eparam_t *param_gain;
+	gs_eparam_t *param_comparison_mode;
+	gs_eparam_t *param_split_position;
 
 	gs_texrender_t *measure_texrender;
 	gs_stagesurf_t *measure_stagesurface;
@@ -52,6 +56,8 @@ struct auto_exposure_data {
 	float speed;
 	float min_gain;
 	float max_gain;
+	bool comparison_mode;
+	float split_position;
 
 	/* running state */
 	float smoothed_luma;
@@ -74,6 +80,8 @@ static void auto_exposure_update(void *data, obs_data_t *settings)
 	filter->speed = (float)obs_data_get_double(settings, SETTING_SPEED);
 	filter->min_gain = (float)obs_data_get_double(settings, SETTING_MIN_GAIN);
 	filter->max_gain = (float)obs_data_get_double(settings, SETTING_MAX_GAIN);
+	filter->comparison_mode = obs_data_get_bool(settings, SETTING_COMPARISON_MODE);
+	filter->split_position = (float)obs_data_get_double(settings, SETTING_SPLIT_POSITION);
 }
 
 static void auto_exposure_get_defaults(obs_data_t *settings)
@@ -83,6 +91,8 @@ static void auto_exposure_get_defaults(obs_data_t *settings)
 	obs_data_set_default_double(settings, SETTING_SPEED, 2.0);
 	obs_data_set_default_double(settings, SETTING_MIN_GAIN, 0.6);
 	obs_data_set_default_double(settings, SETTING_MAX_GAIN, 2.2);
+	obs_data_set_default_bool(settings, SETTING_COMPARISON_MODE, false);
+	obs_data_set_default_double(settings, SETTING_SPLIT_POSITION, 0.5);
 }
 
 static obs_properties_t *auto_exposure_get_properties(void *data)
@@ -101,6 +111,10 @@ static obs_properties_t *auto_exposure_get_properties(void *data)
 	obs_properties_add_float_slider(props, SETTING_MAX_GAIN, obs_module_text("AutoExposure.MaxGain"), 1.0, 4.0,
 					 0.01);
 
+	obs_properties_add_bool(props, SETTING_COMPARISON_MODE, obs_module_text("AutoExposure.ComparisonMode"));
+	obs_properties_add_float_slider(props, SETTING_SPLIT_POSITION, obs_module_text("AutoExposure.SplitPosition"),
+					 0.05, 0.95, 0.01);
+
 	return props;
 }
 
@@ -116,6 +130,8 @@ static void *auto_exposure_create(obs_data_t *settings, obs_source_t *context)
 	if (filter->effect) {
 		filter->param_image = gs_effect_get_param_by_name(filter->effect, "image");
 		filter->param_gain = gs_effect_get_param_by_name(filter->effect, "gain");
+		filter->param_comparison_mode = gs_effect_get_param_by_name(filter->effect, "comparison_mode");
+		filter->param_split_position = gs_effect_get_param_by_name(filter->effect, "split_pos");
 	} else {
 		obs_log(LOG_ERROR, "Failed to load auto_exposure.effect from %s", effect_path);
 	}
@@ -281,6 +297,8 @@ static void auto_exposure_video_render(void *data, gs_effect_t *unused)
 		return;
 
 	gs_effect_set_float(filter->param_gain, filter->smoothed_gain);
+	gs_effect_set_bool(filter->param_comparison_mode, filter->comparison_mode);
+	gs_effect_set_float(filter->param_split_position, filter->split_position);
 
 	obs_source_process_filter_end(filter->context, filter->effect, 0, 0);
 

@@ -1,6 +1,8 @@
 uniform float4x4 ViewProj;
 uniform texture2d image;
 uniform float gain;
+uniform bool comparison_mode;
+uniform float split_pos;
 
 sampler_state def_sampler {
 	Filter   = Linear;
@@ -24,6 +26,17 @@ VertData VSDefault(VertData v_in)
 float4 PSAutoExposure(VertData v_in) : TARGET
 {
 	float4 color = image.Sample(def_sampler, v_in.uv);
+
+	if (comparison_mode) {
+		/* Thin bright divider line so the split is easy to spot. */
+		float line_half_width = 0.0015;
+		if (abs(v_in.uv.x - split_pos) < line_half_width)
+			return float4(1.0, 1.0, 1.0, color.a);
+
+		if (v_in.uv.x < split_pos)
+			return color;
+	}
+
 	float3 graded = color.rgb * gain;
 
 	/* Soft-knee compression above white (1.0) so lifting shadows in a

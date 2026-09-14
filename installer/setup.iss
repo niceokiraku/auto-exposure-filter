@@ -3,7 +3,7 @@
 ; Requires the plugin to already be built in RelWithDebInfo (see README.md).
 
 #define MyAppName "Auto Exposure (Adaptive Brightness) for OBS Studio"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.0.1"
 #define MyAppPublisher "nice okiraku"
 #define MyPluginId "auto-exposure-filter"
 #define MyBuildDir "..\build_x64\rundir\RelWithDebInfo"

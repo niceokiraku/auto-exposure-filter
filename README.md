@@ -57,7 +57,7 @@ you're placing on your system, rather than trusting an opaque `.exe` wrapper
 ## Building from source
 
 ```powershell
-git clone --recursive <this-repo-url>
+git clone --recursive https://github.com/niceokiraku/auto-exposure-filter.git
 cd auto-exposure-filter
 cmake --preset windows-x64
 cmake --build --preset windows-x64

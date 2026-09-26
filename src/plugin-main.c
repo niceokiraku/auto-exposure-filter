@@ -31,10 +31,10 @@ OBS_MODULE_USE_DEFAULT_LOCALE(PLUGIN_NAME, "en-US")
 #define SETTING_MAX_GAIN "max_gain"
 #define SETTING_COMPARISON_MODE "comparison_mode"
 #define SETTING_SPLIT_POSITION "split_position"
+#define SETTING_PERCENTILE "percentile"
 
-/* Side length (in pixels) of the tiny render target used to estimate
- * average scene brightness. Small on purpose: we only need a rough
- * exposure estimate, not an accurate histogram. */
+/* Side length (in pixels) of the small render target used to estimate
+ * scene brightness. 32x32 = 1024 samples, enough for a stable percentile. */
 #define MEASURE_SIZE 32
 
 struct auto_exposure_data {
@@ -58,6 +58,7 @@ struct auto_exposure_data {
 	float max_gain;
 	bool comparison_mode;
 	float split_position;
+	float percentile;
 
 	/* running state */
 	float smoothed_luma;
@@ -82,6 +83,7 @@ static void auto_exposure_update(void *data, obs_data_t *settings)
 	filter->max_gain = (float)obs_data_get_double(settings, SETTING_MAX_GAIN);
 	filter->comparison_mode = obs_data_get_bool(settings, SETTING_COMPARISON_MODE);
 	filter->split_position = (float)obs_data_get_double(settings, SETTING_SPLIT_POSITION);
+	filter->percentile = (float)obs_data_get_double(settings, SETTING_PERCENTILE);
 }
 
 static void auto_exposure_get_defaults(obs_data_t *settings)
@@ -93,6 +95,7 @@ static void auto_exposure_get_defaults(obs_data_t *settings)
 	obs_data_set_default_double(settings, SETTING_MAX_GAIN, 2.2);
 	obs_data_set_default_bool(settings, SETTING_COMPARISON_MODE, false);
 	obs_data_set_default_double(settings, SETTING_SPLIT_POSITION, 0.5);
+	obs_data_set_default_double(settings, SETTING_PERCENTILE, 50.0);
 }
 
 static obs_properties_t *auto_exposure_get_properties(void *data)
@@ -100,6 +103,9 @@ static obs_properties_t *auto_exposure_get_properties(void *data)
 	UNUSED_PARAMETER(data);
 
 	obs_properties_t *props = obs_properties_create();
+
+	obs_properties_add_float_slider(props, SETTING_PERCENTILE, obs_module_text("AutoExposure.Percentile"), 1.0,
+					 99.0, 1.0);
 
 	obs_properties_add_float_slider(props, SETTING_TARGET_BRIGHTNESS,
 					 obs_module_text("AutoExposure.TargetBrightness"), 0.1, 0.9, 0.01);
@@ -181,7 +187,7 @@ static void auto_exposure_read_measurement(struct auto_exposure_data *filter, fl
 	uint32_t linesize;
 
 	if (gs_stagesurface_map(filter->measure_stagesurface, &data, &linesize)) {
-		double sum = 0.0;
+		uint32_t histogram[256] = {0};
 		uint32_t count = 0;
 
 		for (uint32_t y = 0; y < MEASURE_SIZE; y++) {
@@ -191,15 +197,26 @@ static void auto_exposure_read_measurement(struct auto_exposure_data *filter, fl
 				uint8_t g = row[x * 4 + 1];
 				uint8_t b = row[x * 4 + 2];
 				/* Rec. 709 relative luminance */
-				double luma = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255.0;
-				sum += luma;
+				int bin = (int)(0.2126 * r + 0.7152 * g + 0.0722 * b + 0.5);
+				if (bin > 255)
+					bin = 255;
+				histogram[bin]++;
 				count++;
 			}
 		}
 
 		gs_stagesurface_unmap(filter->measure_stagesurface);
 
-		float measured_luma = (float)(sum / (double)count);
+		/* brightness below which `percentile` % of the sampled pixels fall */
+		uint32_t threshold = (uint32_t)((double)count * (double)filter->percentile / 100.0);
+		uint32_t cumulative = 0;
+		int bin = 0;
+		for (; bin < 255; bin++) {
+			cumulative += histogram[bin];
+			if (cumulative >= threshold)
+				break;
+		}
+		float measured_luma = (float)bin / 255.0f;
 
 		if (filter->smoothed_luma < 0.0f) {
 			/* first sample: snap instead of smoothing */

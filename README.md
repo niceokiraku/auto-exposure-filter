@@ -8,12 +8,14 @@ unstable in-game exposure that make streams hard to watch.
 
 ## Features
 
-- Measures the average brightness of the filtered source every frame (via a
-  tiny 32×32 downscale render, so the cost is negligible)
+- Meters scene brightness every frame using a percentile of a tiny 32×32
+  downscale render, so the cost is negligible and small bright lights
+  don't dominate the reading
 - Smooth, configurable-speed correction that avoids flicker/pumping from
   quick flashes
-- Protects highlights as much as possible, so lifting shadows doesn't blow
-  out already-bright areas
+- Lifts shadows while leaving highlights nearly untouched: the brightening
+  gain tapers off for already-bright pixels, so dark scenes don't blow out
+- Built-in before/after comparison mode (split screen)
 - Fully adjustable: target brightness, correction strength, response time,
   and min/max gain clamps
 
@@ -48,7 +50,13 @@ so you can see and verify every file being placed on your system.
    Brightness)**.
 3. Adjust the settings:
 
-**Target Brightness** — the average brightness the filter aims for
+**Metering Position** — which brightness level in the scene is used as the
+reading (50 = median)
+- Decrease: meters on the darker parts of the scene, so the correction lifts
+  more strongly
+- Increase: meters on the brighter parts, so the correction is gentler
+
+**Target Brightness** — the brightness the filter aims for
 (0 = black, 1 = white)
 - Increase: overall brighter image
 - Decrease: overall darker, more subdued image
@@ -74,6 +82,10 @@ changes
   noise)
 - Decrease: less brightening of dark scenes, but image quality stays
   cleaner
+
+**Comparison Mode / Split Position** — shows the original image on the left
+and the corrected image on the right, divided by a line you can move with
+Split Position. Useful for judging the effect while tuning.
 
 **Rule of thumb**: start by setting Response Time to around 1.5–3 seconds
 and check for flicker, then tune Correction Strength between 0.5 and 0.8
@@ -122,9 +134,10 @@ OBS Studio用の映像フィルタです。ゲームによって不安定にな�
 
 ### 機能
 
-- 毎フレーム、映像の平均輝度を測定(32×32ピクセルの縮小描画で行うため負荷はごくわずか)
+- 毎フレーム、映像の明るさをパーセンタイルで測定(32×32ピクセルの縮小描画で行うため負荷はごくわずか。小さな光源に測定値が引っ張られにくい)
 - 反応速度を設定できる滑らかな補正で、瞬間的なフラッシュ等によるチラつきを抑制
-- ハイライト(明るい部分)を可能な限り守り、暗部を明るくしても白飛びしにくい
+- 暗部だけを持ち上げ、明るい部分はほぼそのまま。暗いシーンを明るくしても白飛びしにくい
+- 補正前後を左右に並べて見比べられる比較モードを内蔵
 - 目標の明るさ・補正の強さ・反応速度・補正の上限下限をすべて調整可能
 
 ### 必要環境
@@ -156,7 +169,11 @@ OBS Studio用の映像フィルタです。ゲームによって不安定にな�
 2. 映像フィルタの「+」→「**自動露出補正 (明るさ自動調整)**」を追加
 3. 設定パネルで以下を調整できます:
 
-**目標の明るさ**: 映像の平均輝度をどこに合わせたいかの基準値(0=真っ黒、1=真っ白)
+**測光位置**: 映像のどの明るさを基準に測るか(50=中央値)
+- 下げると: 暗い部分を基準に測るので、補正が強く効く
+- 上げると: 明るい部分を基準に測るので、補正が穏やかになる
+
+**目標の明るさ**: 映像の明るさをどこに合わせたいかの基準値(0=真っ黒、1=真っ白)
 - 上げると: 全体的に明るめの映像になる
 - 下げると: 全体的に暗め・落ち着いた映像になる
 
@@ -175,6 +192,9 @@ OBS Studio用の映像フィルタです。ゲームによって不安定にな�
 **補正の上限**: 補正倍率の上限を設定
 - 上げると: 暗いシーンをより強く明るくする(ノイズが目立ちやすくなる)
 - 下げると: あまり明るくならないが、画質は保たれる
+
+**比較モード / 分割位置**: 左側に補正なしの元映像、右側に補正後の映像を並べて表示します。
+境界線は「分割位置」で動かせます。調整中に効果を確認するのに便利です。
 
 **調整の目安**: まず「反応速度」を1.5〜3秒程度にしてチラつきがないか確認し、次に
 「補正の強さ」を0.5〜0.8の間で自然に見える強さに調整するのがおすすめです。

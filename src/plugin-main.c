@@ -32,6 +32,12 @@ OBS_MODULE_USE_DEFAULT_LOCALE(PLUGIN_NAME, "en-US")
 #define SETTING_COMPARISON_MODE "comparison_mode"
 #define SETTING_SPLIT_POSITION "split_position"
 #define SETTING_PERCENTILE "percentile"
+#define SETTING_AUTO_BYPASS "auto_bypass"
+#define SETTING_DARK_FADE_START "dark_fade_start"
+#define SETTING_DARK_FADE_END "dark_fade_end"
+#define SETTING_BRIGHT_FADE_START "bright_fade_start"
+#define SETTING_BRIGHT_FADE_END "bright_fade_end"
+#define SETTING_SHOW_INDICATOR "show_indicator"
 
 /* Side length (in pixels) of the small render target used to estimate
  * scene brightness. 32x32 = 1024 samples, enough for a stable percentile. */
@@ -45,6 +51,8 @@ struct auto_exposure_data {
 	gs_eparam_t *param_gain;
 	gs_eparam_t *param_comparison_mode;
 	gs_eparam_t *param_split_position;
+	gs_eparam_t *param_show_indicator;
+	gs_eparam_t *param_indicator_value;
 
 	gs_texrender_t *measure_texrender;
 	gs_stagesurf_t *measure_stagesurface;
@@ -59,10 +67,17 @@ struct auto_exposure_data {
 	bool comparison_mode;
 	float split_position;
 	float percentile;
+	bool auto_bypass;
+	float dark_fade_start;
+	float dark_fade_end;
+	float bright_fade_start;
+	float bright_fade_end;
+	bool show_indicator;
 
 	/* running state */
 	float smoothed_luma;
 	float smoothed_gain;
+	float correction_pct; /* 0-1, how much correction is being applied right now */
 	uint64_t last_time_ns;
 };
 
@@ -84,18 +99,30 @@ static void auto_exposure_update(void *data, obs_data_t *settings)
 	filter->comparison_mode = obs_data_get_bool(settings, SETTING_COMPARISON_MODE);
 	filter->split_position = (float)obs_data_get_double(settings, SETTING_SPLIT_POSITION);
 	filter->percentile = (float)obs_data_get_double(settings, SETTING_PERCENTILE);
+	filter->auto_bypass = obs_data_get_bool(settings, SETTING_AUTO_BYPASS);
+	filter->dark_fade_start = (float)obs_data_get_double(settings, SETTING_DARK_FADE_START);
+	filter->dark_fade_end = (float)obs_data_get_double(settings, SETTING_DARK_FADE_END);
+	filter->bright_fade_start = (float)obs_data_get_double(settings, SETTING_BRIGHT_FADE_START);
+	filter->bright_fade_end = (float)obs_data_get_double(settings, SETTING_BRIGHT_FADE_END);
+	filter->show_indicator = obs_data_get_bool(settings, SETTING_SHOW_INDICATOR);
 }
 
 static void auto_exposure_get_defaults(obs_data_t *settings)
 {
-	obs_data_set_default_double(settings, SETTING_TARGET_BRIGHTNESS, 0.45);
-	obs_data_set_default_double(settings, SETTING_STRENGTH, 0.8);
-	obs_data_set_default_double(settings, SETTING_SPEED, 2.0);
-	obs_data_set_default_double(settings, SETTING_MIN_GAIN, 0.6);
-	obs_data_set_default_double(settings, SETTING_MAX_GAIN, 2.2);
+	obs_data_set_default_double(settings, SETTING_TARGET_BRIGHTNESS, 0.35);
+	obs_data_set_default_double(settings, SETTING_STRENGTH, 0.70);
+	obs_data_set_default_double(settings, SETTING_SPEED, 0.20);
+	obs_data_set_default_double(settings, SETTING_MIN_GAIN, 0.60);
+	obs_data_set_default_double(settings, SETTING_MAX_GAIN, 2.20);
 	obs_data_set_default_bool(settings, SETTING_COMPARISON_MODE, false);
 	obs_data_set_default_double(settings, SETTING_SPLIT_POSITION, 0.5);
 	obs_data_set_default_double(settings, SETTING_PERCENTILE, 50.0);
+	obs_data_set_default_bool(settings, SETTING_AUTO_BYPASS, false);
+	obs_data_set_default_double(settings, SETTING_DARK_FADE_START, 0.35);
+	obs_data_set_default_double(settings, SETTING_DARK_FADE_END, 0.45);
+	obs_data_set_default_double(settings, SETTING_BRIGHT_FADE_START, 0.70);
+	obs_data_set_default_double(settings, SETTING_BRIGHT_FADE_END, 0.80);
+	obs_data_set_default_bool(settings, SETTING_SHOW_INDICATOR, false);
 }
 
 static obs_properties_t *auto_exposure_get_properties(void *data)
@@ -116,6 +143,17 @@ static obs_properties_t *auto_exposure_get_properties(void *data)
 					 0.01);
 	obs_properties_add_float_slider(props, SETTING_MAX_GAIN, obs_module_text("AutoExposure.MaxGain"), 1.0, 4.0,
 					 0.01);
+
+	obs_properties_add_bool(props, SETTING_AUTO_BYPASS, obs_module_text("AutoExposure.AutoBypass"));
+	obs_properties_add_float_slider(props, SETTING_DARK_FADE_START, obs_module_text("AutoExposure.DarkFadeStart"),
+					 0.0, 1.0, 0.01);
+	obs_properties_add_float_slider(props, SETTING_DARK_FADE_END, obs_module_text("AutoExposure.DarkFadeEnd"), 0.0,
+					 1.0, 0.01);
+	obs_properties_add_float_slider(props, SETTING_BRIGHT_FADE_START,
+					 obs_module_text("AutoExposure.BrightFadeStart"), 0.0, 1.0, 0.01);
+	obs_properties_add_float_slider(props, SETTING_BRIGHT_FADE_END, obs_module_text("AutoExposure.BrightFadeEnd"),
+					 0.0, 1.0, 0.01);
+	obs_properties_add_bool(props, SETTING_SHOW_INDICATOR, obs_module_text("AutoExposure.ShowIndicator"));
 
 	obs_properties_add_bool(props, SETTING_COMPARISON_MODE, obs_module_text("AutoExposure.ComparisonMode"));
 	obs_properties_add_float_slider(props, SETTING_SPLIT_POSITION, obs_module_text("AutoExposure.SplitPosition"),
@@ -138,6 +176,8 @@ static void *auto_exposure_create(obs_data_t *settings, obs_source_t *context)
 		filter->param_gain = gs_effect_get_param_by_name(filter->effect, "gain");
 		filter->param_comparison_mode = gs_effect_get_param_by_name(filter->effect, "comparison_mode");
 		filter->param_split_position = gs_effect_get_param_by_name(filter->effect, "split_pos");
+		filter->param_show_indicator = gs_effect_get_param_by_name(filter->effect, "show_indicator");
+		filter->param_indicator_value = gs_effect_get_param_by_name(filter->effect, "indicator_value");
 	} else {
 		obs_log(LOG_ERROR, "Failed to load auto_exposure.effect from %s", effect_path);
 	}
@@ -271,17 +311,48 @@ static void auto_exposure_render_measurement_pass(struct auto_exposure_data *fil
 	}
 }
 
+/* Returns 1.0 at `full_at`, 0.0 at `zero_at`, smoothly interpolated (and
+ * clamped) in between. `full_at` and `zero_at` may be given in either
+ * order; the ramp direction follows automatically. */
+static float fade_ramp(float value, float full_at, float zero_at)
+{
+	if (full_at == zero_at)
+		return 1.0f; /* degenerate range: treat as always-full rather than divide by zero */
+
+	float t = (value - full_at) / (zero_at - full_at);
+	t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
+	return 1.0f - (t * t * (3.0f - 2.0f * t)); /* smoothstep, inverted */
+}
+
 static float auto_exposure_compute_gain(struct auto_exposure_data *filter)
 {
-	if (filter->smoothed_luma < 0.0f)
+	if (filter->smoothed_luma < 0.0f) {
+		filter->correction_pct = 0.0f;
 		return 1.0f;
+	}
 
 	float target = filter->target_brightness;
 	float measured = filter->smoothed_luma < 0.01f ? 0.01f : filter->smoothed_luma;
 
 	float raw_gain = target / measured;
+
+	/* Auto-bypass: fade the correction to zero once the scene is already
+	 * bright/dark enough that it isn't needed, independently for each
+	 * direction. Off by default; when off, fade stays 1.0 so behavior is
+	 * unchanged from before this feature existed. */
+	float fade = 1.0f;
+	if (filter->auto_bypass) {
+		if (raw_gain > 1.0f)
+			fade = fade_ramp(measured, filter->dark_fade_start, filter->dark_fade_end);
+		else if (raw_gain < 1.0f)
+			fade = fade_ramp(measured, filter->bright_fade_end, filter->bright_fade_start);
+	}
+
+	float effective_strength = filter->strength * fade;
+	filter->correction_pct = effective_strength;
+
 	/* blend between "no correction" (1.0) and the full computed gain */
-	float gain = 1.0f + (raw_gain - 1.0f) * filter->strength;
+	float gain = 1.0f + (raw_gain - 1.0f) * effective_strength;
 
 	if (gain < filter->min_gain)
 		gain = filter->min_gain;
@@ -316,6 +387,8 @@ static void auto_exposure_video_render(void *data, gs_effect_t *unused)
 	gs_effect_set_float(filter->param_gain, filter->smoothed_gain);
 	gs_effect_set_bool(filter->param_comparison_mode, filter->comparison_mode);
 	gs_effect_set_float(filter->param_split_position, filter->split_position);
+	gs_effect_set_bool(filter->param_show_indicator, filter->show_indicator);
+	gs_effect_set_float(filter->param_indicator_value, filter->correction_pct);
 
 	obs_source_process_filter_end(filter->context, filter->effect, 0, 0);
 

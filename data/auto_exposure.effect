@@ -27,31 +27,47 @@ VertData VSDefault(VertData v_in)
 
 float4 PSAutoExposure(VertData v_in) : TARGET
 {
+	/* The input is premultiplied; grade the straight color and
+	 * premultiply again on the way out. */
 	float4 color = image.Sample(def_sampler, v_in.uv);
+	float3 rgb = color.rgb * ((color.a > 0.0) ? (1.0 / color.a) : 0.0);
 
-	/* When brightening, taper the gain off for already-bright pixels so
-	 * shadows are lifted while highlights stay close to the original.
-	 * The taper is 1 for black and falls toward 0 for white. */
 	float pixel_gain = gain;
 	if (gain > 1.0) {
-		float luma = dot(color.rgb, float3(0.2126, 0.7152, 0.0722));
+		/* When brightening, taper the gain off for already-bright pixels
+		 * so shadows are lifted while highlights stay close to the
+		 * original. The taper is 1 for black and falls toward 0 for white. */
+		float luma = dot(rgb, float3(0.2126, 0.7152, 0.0722));
 		float taper = pow(saturate(1.0 - luma), 3.0);
 		pixel_gain = 1.0 + (gain - 1.0) * taper;
+
+		/* Soft knee on the brightest channel: once the boost would push
+		 * it past the knee, the excess is compressed so it approaches
+		 * but never exceeds 1.0. Saturated colors have a low luma, so
+		 * the taper alone would let them clip and wash out. Scaling all
+		 * three channels by the same reduced gain keeps the hue. The
+		 * knee never sits below the pixel's own level, so pixels that
+		 * were already bright are left untouched rather than darkened. */
+		float peak = max(rgb.r, max(rgb.g, rgb.b));
+		float boosted = peak * pixel_gain;
+		float knee = max(peak, 0.8);
+		if (boosted > knee) {
+			float headroom = 1.0 - knee;
+			float compressed = knee;
+			if (headroom > 0.0)
+				compressed = knee + headroom * (1.0 - exp((knee - boosted) / headroom));
+			pixel_gain = compressed / peak;
+		}
 	}
-	float3 graded = color.rgb * pixel_gain;
+	float3 outc = saturate(rgb * pixel_gain);
 
-	/* Soft-knee compression above white (1.0) so lifting shadows in a
-	 * dark scene doesn't clip highlights that were already bright. */
-	float3 outc = graded / (1.0 + max(graded - 1.0, 0.0));
-	outc = saturate(outc);
-
-	float4 result = float4(outc, color.a);
+	float4 result = float4(outc * color.a, color.a);
 
 	if (comparison_mode) {
 		/* Thin bright divider line so the split is easy to spot. */
 		float line_half_width = 0.0015;
 		if (abs(v_in.uv.x - split_pos) < line_half_width)
-			result = float4(1.0, 1.0, 1.0, color.a);
+			result = float4(color.a, color.a, color.a, color.a);
 		else if (v_in.uv.x < split_pos)
 			result = color;
 	}
@@ -67,7 +83,7 @@ float4 PSAutoExposure(VertData v_in) : TARGET
 			if (v_in.uv.x <= fill_x)
 				result = float4(0.2, 0.9, 0.3, 1.0);
 			else
-				result = float4(0.15, 0.15, 0.15, 0.8);
+				result = float4(0.12, 0.12, 0.12, 0.8);
 		}
 	}
 

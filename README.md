@@ -56,6 +56,13 @@ reading (50 = median)
   more strongly
 - Increase: meters on the brighter parts, so the correction is gentler
 
+**Metering Width** — averages a band of brightness levels around the
+Metering Position instead of reading a single point (0 = single point, the
+default)
+- Increase: in scenes that are half dark and half bright, the correction
+  changes gradually instead of jumping when the balance shifts slightly
+- 0: same metering as earlier versions
+
 **Target Brightness** — the brightness the filter aims for
 (0 = black, 1 = white)
 - Increase: overall brighter image
@@ -82,6 +89,20 @@ changes
   noise)
 - Decrease: less brightening of dark scenes, but image quality stays
   cleaner
+
+**Auto-Bypass** — fades the correction out automatically while the scene
+doesn't need it, so the filter can stay enabled all the time (off by default)
+- Shadow Lift (Full Strength Below / Zero Above): shadow lift only happens
+  while the scene is darker than Target Brightness, so these two only have
+  an effect when set lower than it. Lower them to leave slightly dark scenes
+  alone and lift only clearly dark ones
+- Highlight Suppression (Zero Below / Full Strength Above): set both higher
+  than Target Brightness. Scenes between the target and "Zero Below" are
+  left untouched
+
+**Show Adjustment Indicator** — draws a small gauge in the bottom-left corner
+showing how much correction is being applied right now (0–100%). Meant for
+tuning; turn it off when you are done.
 
 **Comparison Mode / Split Position** — shows the original image on the left
 and the corrected image on the right, divided by a line you can move with
@@ -173,6 +194,10 @@ OBS Studio用の映像フィルタです。ゲームによって不安定にな�
 - 下げると: 暗い部分を基準に測るので、補正が強く効く
 - 上げると: 明るい部分を基準に測るので、補正が穏やかになる
 
+**測光の幅**: 測光位置の1点だけでなく、その前後の範囲を平均して測る(0=1点のみ、既定)
+- 上げると: 明暗が半々の場面で、バランスが少し変わっただけで補正が急変するのを抑え、なだらかに変化する
+- 0のとき: これまでのバージョンと同じ測り方
+
 **目標の明るさ**: 映像の明るさをどこに合わせたいかの基準値(0=真っ黒、1=真っ白)
 - 上げると: 全体的に明るめの映像になる
 - 下げると: 全体的に暗め・落ち着いた映像になる
@@ -192,6 +217,17 @@ OBS Studio用の映像フィルタです。ゲームによって不安定にな�
 **補正の上限**: 補正倍率の上限を設定
 - 上げると: 暗いシーンをより強く明るくする(ノイズが目立ちやすくなる)
 - 下げると: あまり明るくならないが、画質は保たれる
+
+**自動バイパス**: 補正が要らない明るさの場面では、補正を自動的に弱めて止めます。
+フィルタを常にオンにしたまま使いたい場合に便利です(既定はオフ)。
+- 暗部補正(フル稼働する明るさ / 停止する明るさ): 暗部補正は画面が「目標の明るさ」より
+  暗いときだけ働くため、この2項目は目標の明るさより低い値にしたときだけ効果があります。
+  値を下げると、少し暗い程度の場面はそのままにして、はっきり暗い場面だけ明るくできます
+- ハイライト抑制(停止する明るさ / フル稼働する明るさ): 2項目とも目標の明るさより高い値に
+  します。目標の明るさから「停止する明るさ」までの場面には補正がかかりません
+
+**調整インジケーターを表示**: 画面左下の小さなバーで、今どれくらい補正が効いているか
+(0〜100%)を表示します。調整用なので、確認が済んだらオフに戻してください。
 
 **比較モード / 分割位置**: 左側に補正なしの元映像、右側に補正後の映像を並べて表示します。
 境界線は「分割位置」で動かせます。調整中に効果を確認するのに便利です。

@@ -130,18 +130,18 @@ static void auto_exposure_update(void *data, obs_data_t *settings)
 
 static void auto_exposure_get_defaults(obs_data_t *settings)
 {
-	obs_data_set_default_double(settings, SETTING_TARGET_BRIGHTNESS, 0.35);
-	obs_data_set_default_double(settings, SETTING_STRENGTH, 0.70);
+	obs_data_set_default_double(settings, SETTING_TARGET_BRIGHTNESS, 0.40);
+	obs_data_set_default_double(settings, SETTING_STRENGTH, 0.80);
 	obs_data_set_default_double(settings, SETTING_SPEED, 0.20);
-	obs_data_set_default_double(settings, SETTING_MIN_GAIN, 0.60);
-	obs_data_set_default_double(settings, SETTING_MAX_GAIN, 2.20);
+	obs_data_set_default_double(settings, SETTING_MIN_GAIN, 0.20);
+	obs_data_set_default_double(settings, SETTING_MAX_GAIN, 2.50);
 	obs_data_set_default_bool(settings, SETTING_COMPARISON_MODE, false);
 	obs_data_set_default_double(settings, SETTING_SPLIT_POSITION, 0.5);
 	obs_data_set_default_double(settings, SETTING_PERCENTILE, 50.0);
 	obs_data_set_default_double(settings, SETTING_METER_WIDTH, 0.0);
 	obs_data_set_default_bool(settings, SETTING_AUTO_BYPASS, false);
-	obs_data_set_default_double(settings, SETTING_DARK_FADE_START, 0.35);
-	obs_data_set_default_double(settings, SETTING_DARK_FADE_END, 0.45);
+	obs_data_set_default_double(settings, SETTING_DARK_FADE_START, 0.40);
+	obs_data_set_default_double(settings, SETTING_DARK_FADE_END, 0.50);
 	obs_data_set_default_double(settings, SETTING_BRIGHT_FADE_START, 0.70);
 	obs_data_set_default_double(settings, SETTING_BRIGHT_FADE_END, 0.80);
 	obs_data_set_default_bool(settings, SETTING_SHOW_INDICATOR, false);
